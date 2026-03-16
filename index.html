@@ -494,13 +494,13 @@ var GRAND = JSON.parse(document.getElementById('d-grand').textContent);
 
 // Garante campo pag (pago por mes de DTPAGTO) — retrocompativel com dados sem campo pag
 FORN.forEach(function(f){
-  if(\!f.pag){
+  if(!f.pag){
     var pag={};
     Object.keys(f.det||{}).forEach(function(nf){
       (f.det[nf].dupls||[]).forEach(function(du){
         if(du.pagto && du.vpago>0){
           var mp=du.pagto.substr(5,2);
-          if(\!pag[mp]) pag[mp]={pago:0};
+          if(!pag[mp]) pag[mp]={pago:0};
           pag[mp].pago=Math.round((pag[mp].pago+du.vpago)*100)/100;
         }
       });
