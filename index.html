@@ -320,7 +320,6 @@ tfoot td:first-child,tfoot td:nth-child(2){text-align:left;}
 <!-- NAV -->
 <div class="nav">
   <div class="nt on" onclick="showPg('visao',this)">&#128202; Vis&#227;o Geral</div>
-  <div class="nt"    onclick="showPg('mensal',this)">&#128197; M&#234;s a M&#234;s</div>
 </div>
 
 <!-- ═══ VISÃO GERAL ═══ -->
@@ -381,61 +380,6 @@ tfoot td:first-child,tfoot td:nth-child(2){text-align:left;}
 </div>
 
 <!-- ═══ MÊS A MÊS ═══ -->
-<div class="pg" id="pg-mensal">
-  <div class="mfb" id="mfb-mes">
-    <span class="mfb-l">&#128197; M&#234;s:</span>
-    <div class="mp on" onclick="filtMes('todos',this)">Todos</div>
-    <div class="mp" onclick="filtMes('01',this)">Jan</div>
-    <div class="mp" onclick="filtMes('02',this)">Fev</div>
-    <div class="mp" onclick="filtMes('03',this)">Mar</div>
-    <div class="mp" onclick="filtMes('04',this)">Abr</div>
-    <div class="mp" onclick="filtMes('05',this)">Mai</div>
-    <div class="mp" onclick="filtMes('06',this)">Jun</div>
-  </div>
-  <div class="g2">
-    <div class="cc"><h3>Compras por M&#234;s</h3><div class="cs">Data emiss&#227;o NF</div><div class="cht"><canvas id="ch-mc"></canvas></div></div>
-    <div class="cc"><h3>T&#237;tulos, Pagos &amp; Em Aberto</h3><div class="cs">Vencimento | Pagamento | Aberto por venc.</div><div class="cht"><canvas id="ch-mt"></canvas></div></div>
-  </div>
-  <div class="sbar">
-    <input type="text" id="msrch" placeholder="&#128269; Buscar fornecedor..." oninput="renderMesT()">
-    <div class="sb-s">
-      <span>Ordenar:</span>
-      <select id="msort" onchange="renderMesT()">
-        <option value="titulo">Maior Títulos</option>
-        <option value="aberto">Maior Em Aberto</option>
-        <option value="venc">Maior Vencido</option>
-        <option value="comp">Maior Comprado</option>
-        <option value="pago">Maior Pago</option>
-        <option value="nm">Nome A-Z</option>
-      </select>
-    </div>
-    <label class="sb-chk"><input type="checkbox" id="monly-venc" onchange="renderMesT()"> &#9888; Só com vencidos</label>
-    <span class="si" id="mti"></span>
-  </div>
-  <div class="tw">
-    <div class="th2"><h3 id="mtit">Fornecedores — Todos os Meses</h3><span class="tc2" id="mtc"></span></div>
-    <div class="ts">
-      <table>
-        <thead>
-          <tr>
-            <th class="tl">#</th>
-            <th class="tl">Fornecedor</th>
-            <th onclick="setMS('comp')">Comprado (NF)</th>
-            <th onclick="setMS('titulo')">T&#237;tulos (Venc.)</th>
-            <th onclick="setMS('pago')">Pago (Dt.Pagto)</th>
-            <th onclick="setMS('aberto')">Em Aberto</th>
-            <th onclick="setMS('venc')">&#9888; Vencido</th>
-            <th>Pr&#243;x. Venc.</th>
-            <th>% Pago</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="mtb"></tbody>
-        <tfoot id="mtf"></tfoot>
-      </table>
-    </div>
-  </div>
-</div>
 
 
 <!-- DATA -->
@@ -476,7 +420,6 @@ var S={
   pgName:'visao',
   vgMes:'todos',
   fornMes:'todos',fornSrch:'',fornSort:'titulo',onlyVenc:false,selId:null,
-  mesMes:'todos',mesSrch:'',mesSort:'titulo',mesOnlyVenc:false
 };
 var CH={};
 
@@ -587,7 +530,6 @@ window.showPg=function(n,el){
   document.getElementById('pg-'+n).classList.add('on');
   if(el) el.classList.add('on');
   if(n==='visao'){buildVG();renderCards();}
-  if(n==='mensal'){buildMC();renderMesT();}
 };
 
 /* ══════ VISÃO GERAL ══════ */
@@ -913,91 +855,6 @@ window.togDup=function(rid){
 window.closeDet=function(){document.getElementById('det-panel').style.display='none';S.selId=null;renderCards();};
 window.dTab=function(tab,el){document.querySelectorAll('.dtab').forEach(function(t){t.classList.remove('on');});document.querySelectorAll('.dtc').forEach(function(c){c.classList.remove('on');});el.classList.add('on');document.getElementById('dtc-'+tab).classList.add('on');};
 
-/* ══════ MÊS A MÊS ══════ */
-window.filtMes=function(mes,el){
-  S.mesMes=mes;
-  document.querySelectorAll('#mfb-mes .mp').forEach(function(p){p.classList.remove('on');});
-  el.classList.add('on'); buildMC(); renderMesT();
-};
-window.setMS=function(k){S.mesSort=k;document.getElementById('msort').value=k;renderMesT();};
-
-function buildMC(){
-  dch('ch-mc');dch('ch-mt');
-  var labels=MM.map(function(m){return MS[m];});
-  var cC=[],cT=[],cP=[],cA=[];
-  MM.forEach(function(m){
-    var c=0,t=0,p=0,a=0;
-    FORN.forEach(function(f){c+=(f.comp[m]||{}).total||0;var ti=f.tit[m]||{};t+=ti.titulo||0;p+=ti.pago||0;a+=ti.aberto||0;});
-    cC.push(Math.round(c));cT.push(Math.round(t));cP.push(Math.round(p));cA.push(Math.round(a));
-  });
-  var bopt={responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}},scales:{y:{ticks:{callback:function(v){return 'R$ '+(v/1e6).toFixed(1)+'M';}}}}};
-  CH['ch-mc']=new Chart(document.getElementById('ch-mc'),{type:'bar',data:{labels:labels,datasets:[{label:'Comprado (NF)',data:cC,backgroundColor:'rgba(217,48,37,.75)',borderRadius:4,borderSkipped:false}]},options:Object.assign({},bopt,{plugins:{legend:{display:false}}})});
-  CH['ch-mt']=new Chart(document.getElementById('ch-mt'),{type:'bar',data:{labels:labels,datasets:[
-    {label:'Títulos (Venc.)',data:cT,backgroundColor:'rgba(21,101,192,.7)',borderRadius:4,borderSkipped:false},
-    {label:'Pago (Dt.Pagto)',data:cP,backgroundColor:'rgba(27,127,62,.7)',borderRadius:4,borderSkipped:false},
-    {label:'Em Aberto',data:cA,backgroundColor:'rgba(200,122,0,.7)',borderRadius:4,borderSkipped:false}
-  ]},options:bopt});
-}
-
-window.renderMesT=function(){
-  S.mesSrch=document.getElementById('msrch').value.toLowerCase();
-  S.mesSort=document.getElementById('msort').value;
-  S.mesOnlyVenc=document.getElementById('monly-venc').checked;
-  var mes=S.mesMes;
-  var mesLbl=mes==='todos'?'Todos os Meses':(MN[mes]||mes);
-  document.getElementById('mtit').textContent='Fornecedores — '+mesLbl;
-
-  var rows=FORN.map(function(f){
-    var a=agg(f,mes);
-    var pv=proxVencForn(f);
-    return {f:f,comp:a.comp,titulo:a.titulo,pago:a.pago,aberto:a.aberto,nfc:a.nfc,venc:a.venc,proxVenc:pv};
-  }).filter(function(r){
-    if(S.mesSrch&&r.f.nm.toLowerCase().indexOf(S.mesSrch)<0) return false;
-    if(S.mesOnlyVenc&&r.venc<=0) return false;
-    return r.comp>0||r.titulo>0||r.pago>0||r.aberto>0;
-  }).sort(function(a,b){
-    var k=S.mesSort;
-    if(k==='nm') return a.f.nm.localeCompare(b.f.nm);
-    return (b[k]||0)-(a[k]||0);
-  });
-
-  document.getElementById('mtc').textContent=rows.length+' fornecedores';
-  document.getElementById('mti').textContent=rows.length+' fornecedores';
-
-  var tC=0,tT=0,tP=0,tA=0,tV=0;
-  var tbody='';
-  rows.forEach(function(r,i){
-    tC+=r.comp;tT+=r.titulo;tP+=r.pago;tA+=r.aberto;tV+=r.venc;
-    var p=pct(r.pago,r.titulo);
-    var hv=r.venc>0;
-    var pvDias=r.proxVenc?diasAtraso(r.proxVenc):null;
-    var pvColor=pvDias>0?'color:var(--or);font-weight:700':pvDias===0?'color:var(--re)':'color:var(--mu)';
-    tbody+='<tr class="'+(hv?'row-venc':'')+'">'+
-      '<td>'+(i+1)+'</td>'+
-      '<td title="'+r.f.nm+'">'+r.f.nm+'</td>'+
-      '<td class="n">'+fmtF(r.comp)+'</td>'+
-      '<td class="n">'+fmtF(r.titulo)+'</td>'+
-      '<td class="n" style="color:var(--gr)">'+fmtF(r.pago)+'</td>'+
-      '<td class="n" style="color:'+(r.aberto>0?'var(--yw)':'var(--gr)')+'">'+fmtF(r.aberto)+'</td>'+
-      '<td class="n">'+(hv?'<span class="vt vt-o">⚠ '+fmtF(r.venc)+'</span>':'<span class="vt vt-ok">Em dia</span>')+'</td>'+
-      '<td style="'+pvColor+';text-align:right;font-size:.7rem">'+(r.proxVenc?r.proxVenc+'<br><small>'+(pvDias>0?pvDias+'d atras.':pvDias===0?'Hoje':'')+'</small>':'—')+'</td>'+
-      '<td class="n">'+
-        '<div class="pb" style="min-width:55px"><div class="pbf" style="width:'+p+'%;background:'+(p>=95?'#1B7F3E':p>=50?'#C87A00':'#D93025')+'"></div></div>'+
-        '<small style="font-size:.62rem;color:var(--mu)">'+pctS(r.pago,r.titulo)+'</small>'+
-      '</td>'+
-      '<td>'+statusBadge(p,hv)+'</td>'+
-    '</tr>';
-  });
-  document.getElementById('mtb').innerHTML=tbody;
-  document.getElementById('mtf').innerHTML=
-    '<tr><td></td><td>TOTAL ('+rows.length+')</td>'+
-    '<td class="n">'+fmtF(tC)+'</td>'+
-    '<td class="n">'+fmtF(tT)+'</td>'+
-    '<td class="n" style="color:var(--gr)">'+fmtF(tP)+'</td>'+
-    '<td class="n" style="color:var(--yw)">'+fmtF(tA)+'</td>'+
-    '<td class="n" style="color:var(--or)">'+fmtF(tV)+'</td>'+
-    '<td></td><td></td><td></td></tr>';
-};
 
 /* ══════ AGENDA DE VENCIMENTOS ══════ */
 var WD=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
