@@ -1182,7 +1182,7 @@ function buildAgenda(mes){
   var year=2026, mIdx=parseInt(mes,10)-1;
   var hoje=TODAY; // 'YYYY-MM-DD'
 
-  // Agrupa duplicatas em aberto por dia
+  // Agrupa todos os títulos por dia (pagos + em aberto)
   var byDay={};
   FORN.forEach(function(f){
     Object.keys(f.det||{}).forEach(function(nf){
@@ -1190,14 +1190,13 @@ function buildAgenda(mes){
       (d.dupls||[]).forEach(function(du){
         if(!du.venc) return;
         var eff=vencEfetivo(du.venc); // sáb/dom → próx. seg
-        // Agrupa pelo dia efetivo (que pode ser num mês diferente do original)
         if(eff.substr(0,7)!==(year+'-'+mes)) return;
+        if(du.valor<=0) return;
         var ab=r2(du.valor-du.vpago);
-        if(ab<=0.01) return;
         if(!byDay[eff]) byDay[eff]=[];
-        // Sinaliza se houve ajuste de fim de semana
         var adjusted=eff!==du.venc;
-        byDay[eff].push({forn:f.nm,fid:f.id,nf:nf,dup:du.dup,venc:du.venc,vencEff:eff,adjusted:adjusted,valor:du.valor,vpago:du.vpago,ab:ab});
+        var isPago=du.vpago>=du.valor-0.01;
+        byDay[eff].push({forn:f.nm,fid:f.id,nf:nf,dup:du.dup,venc:du.venc,pagto:du.pagto||'',vencEff:eff,adjusted:adjusted,valor:du.valor,vpago:du.vpago,ab:ab,isPago:isPago});
       });
     });
   });
@@ -1228,9 +1227,9 @@ function buildAgenda(mes){
       }
     }
     if(days.length>0){
-      var wTotal=0,wQtd=0;
-      days.forEach(function(d){d.entries.forEach(function(e){wTotal+=e.ab;wQtd++;});});
-      weeks.push({days:days,total:wTotal,qtd:wQtd,
+      var wTotal=0,wPago=0,wTitulo=0,wQtd=0;
+      days.forEach(function(d){d.entries.forEach(function(e){wTotal+=e.ab;wPago+=e.vpago;wTitulo+=e.valor;wQtd++;});});
+      weeks.push({days:days,total:wTotal,pago:wPago,titulo:wTitulo,qtd:wQtd,
         label:'Sem. '+wStart.getDate()+'/'+((wStart.getMonth()+1)<10?'0':'')+(wStart.getMonth()+1)+
               ' – '+Math.min(wEnd.getDate(),lastDay.getDate())+'/'+((Math.min(wEnd.getDate(),lastDay.getDate())===wEnd.getDate()?wEnd.getMonth()+1:mIdx+1)<10?'0':'')+(wEnd.getMonth()===mIdx?wEnd.getMonth()+1:mIdx+1)
       });
@@ -1238,14 +1237,16 @@ function buildAgenda(mes){
     cur.setDate(cur.getDate()+7);
   }
 
-  var grandTotal=0,grandQtd=0;
-  weeks.forEach(function(w){grandTotal+=w.total;grandQtd+=w.qtd;});
+  var grandTotal=0,grandPago=0,grandTitulo=0,grandQtd=0;
+  weeks.forEach(function(w){grandTotal+=w.total;grandPago+=w.pago;grandTitulo+=w.titulo;grandQtd+=w.qtd;});
   var maxWeek=weeks.reduce(function(m,w){return w.total>m?w.total:m;},0);
 
   var html='<div class="ag-wrap">'+
     '<div class="ag-hdr">'+
       '<h3>&#128197; Agenda de Vencimentos — '+MFULL[mIdx]+'</h3>'+
-      '<span class="ag-ttl" style="color:var(--or)">'+fmtF(grandTotal)+' · '+grandQtd+' títulos</span>'+
+      '<span class="ag-ttl" style="color:var(--or)">'+fmtF(grandTotal)+' em aberto</span>'+
+      '<span style="font-size:.72rem;color:var(--gr);margin-left:12px">&#10003; '+fmtF(grandPago)+' pago</span>'+
+      '<span style="font-size:.68rem;color:var(--mu);margin-left:8px">'+grandQtd+' títulos</span>'+
     '</div>'+
     '<div class="ag-weeks">';
 
@@ -1259,6 +1260,7 @@ function buildAgenda(mes){
       '<span class="ag-wlbl">'+w.label+'</span>'+
       '<div class="ag-wbar-wrap"><div class="ag-wbar" style="width:'+wpct.toFixed(1)+'%;background:'+wclr+'"></div></div>'+
       '<span class="ag-wval" style="color:'+(w.total>0?'var(--or)':'var(--mu)')+'">'+fmtF(w.total)+'</span>'+
+      '<span style="font-size:.67rem;color:var(--gr);margin-left:8px">'+(w.pago>0?'&#10003; '+fmtF(w.pago):'')+'</span>'+
       '<span class="ag-wqtd">'+w.qtd+' tít.</span>'+
       '<span class="ag-wchev">&#9658;</span>'+
     '</div>';
@@ -1267,21 +1269,27 @@ function buildAgenda(mes){
     var maxDay=w.days.reduce(function(m,d){var t=d.entries.reduce(function(s,e){return s+e.ab;},0);return t>m?t:m;},0);
     w.days.forEach(function(d,di){
       var dtotal=d.entries.reduce(function(s,e){return s+e.ab;},0);
+      var dpago=d.entries.reduce(function(s,e){return s+e.vpago;},0);
+      var dtitulo=d.entries.reduce(function(s,e){return s+e.valor;},0);
       var dqtd=d.entries.length;
       var dpct=maxDay>0?Math.max(4,(dtotal/maxDay*100)):0;
       var isToday=d.date===hoje;
       var isPast=d.date<hoje;
       var isVencPast=isPast&&dtotal>0;
-      var dclr=isVencPast?'var(--or)':dtotal>0?'#1565C0':'#C8C8C8';
-      var dtextclr=isVencPast?'var(--or)':dtotal>0?'var(--bl)':'var(--mu)';
-      var tag=isVencPast?'<span class="ag-dtag ag-vt ag-vt-v">Vencido</span>':
+      var allPaidDay=d.entries.length>0&&dtotal<=0.01;
+      var dclr=allPaidDay?'var(--gr)':isVencPast?'var(--or)':dtotal>0?'#1565C0':'#C8C8C8';
+      var dtextclr=allPaidDay?'var(--gr)':isVencPast?'var(--or)':dtotal>0?'var(--bl)':'var(--mu)';
+      var allPaid=d.entries.length>0&&dtotal<=0.01;
+      var tag=allPaid?'<span class="ag-dtag ag-vt" style="background:#E8F5E9;color:var(--gr)">✓ Pago</span>':
+               isVencPast?'<span class="ag-dtag ag-vt ag-vt-v">Vencido</span>':
                isToday&&dtotal>0?'<span class="ag-dtag ag-vt" style="background:#FFF3E0;color:var(--or)">Hoje</span>':
                !isPast&&dtotal>0?'<span class="ag-dtag ag-vt ag-vt-a">A pagar</span>':'';
       var rowcls='ag-day'+(isToday?' ag-today':isPast?' ag-past':'')+' ag-dayrow';
       html+='<div class="'+rowcls+'" id="agd'+wi+'_'+di+'" onclick="agTogD('+wi+','+di+')">'+
         '<span class="ag-dlbl">'+d.dayNum+'/'+((mIdx+1)<10?'0':'')+(mIdx+1)+'<span class="ag-wd">'+d.wd+'</span></span>'+
         '<div class="ag-dbar-wrap"><div class="ag-dbar" style="width:'+dpct.toFixed(1)+'%;background:'+dclr+'"></div></div>'+
-        '<span class="ag-dval" style="color:'+dtextclr+'">'+(dtotal>0?fmtF(dtotal):'—')+'</span>'+
+        '<span class="ag-dval" style="color:'+dtextclr+'">'+(allPaidDay?fmtF(dpago):dtotal>0?fmtF(dtotal):'—')+'</span>'+
+        '<span style="font-size:.64rem;color:var(--gr);margin-left:6px">'+(dpago>0?'&#10003; '+fmtF(dpago):'')+'</span>'+
         '<span class="ag-dqtd">'+(dqtd>0?dqtd+' tít.':'')+'</span>'+
         tag+
       '</div>';
@@ -1300,8 +1308,8 @@ function buildAgenda(mes){
           var tb=Object.values(b.nfs).flat().reduce(function(s,e){return s+e.ab;},0);
           return tb-ta;
         });
-        var detTotal=0;
-        d.entries.forEach(function(e){detTotal+=e.ab;});
+        var detTotal=0,detPago=0,detTitulo=0;
+        d.entries.forEach(function(e){detTotal+=e.ab;detPago+=e.vpago;detTitulo+=e.valor;});
         var detId='agdet'+wi+'_'+di;
 
         html+='<div class="ag-det" id="'+detId+'">'+
@@ -1331,7 +1339,7 @@ function buildAgenda(mes){
             '<td class="n" style="font-weight:700">'+fmtF(fTot)+'</td>'+
             '<td class="n" style="color:var(--gr);font-weight:700">'+fmtF(fPago)+'</td>'+
             '<td class="n" style="color:'+(isPast?'var(--or)':'var(--yw)')+';font-weight:700">'+fmtF(fAb)+'</td>'+
-            '<td><span class="ag-vt '+(isPast?'ag-vt-v':'ag-vt-a')+'">'+(isPast?'⚠ Vencido':'A pagar')+'</span></td>'+
+            '<td>'+(fAb<=0.01?'<span class="ag-vt" style="background:#E8F5E9;color:var(--gr)">✓ Pago</span>':isPast?'<span class="ag-vt ag-vt-v">⚠ Vencido</span>':'<span class="ag-vt ag-vt-a">A pagar</span>')+'</td>'+
           '</tr>';
 
           // Bloco de NFs (oculto, expande ao clicar no fornecedor)
@@ -1343,7 +1351,12 @@ function buildAgenda(mes){
             '<th style="text-align:right;padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Valor</th>'+
             '<th style="text-align:right;padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Pago</th>'+
             '<th style="text-align:right;padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Em Aberto</th>'+
-            '<th style="text-align:right;padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Vencimento</th>'+
+            '<th style="padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Vencimento</th>'+
+            '<th style="padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Dt.Pagto</th>'+
+            '<th style="text-align:right;padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Valor</th>'+
+            '<th style="text-align:right;padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Pago</th>'+
+            '<th style="text-align:right;padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Em Aberto</th>'+
+            '<th style="padding:4px 10px;font-size:.57rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);font-weight:700;border-bottom:1px solid #D0D5DD">Status</th>'+
           '</tr></thead><tbody>';
 
           Object.keys(fr.nfs).forEach(function(nf,ni){
@@ -1372,12 +1385,15 @@ function buildAgenda(mes){
             html+='<table style="width:100%;border-collapse:collapse">';
             ndupls.forEach(function(e){
               var vencDisp=e.venc+(e.adjusted?' <span style="font-size:.52rem;background:#E3F2FD;color:#1565C0;padding:1px 3px;border-radius:2px">↷ seg</span>':'');
-              html+='<tr style="border-bottom:1px solid #E8EDF5">'+
+              var dupStatus=e.isPago?'<span style="background:#E8F5E9;color:var(--gr);font-size:.58rem;padding:1px 5px;border-radius:3px;font-weight:700">✓ Pago</span>':(isPast&&e.ab>0.01?'<span style="background:#FFF3E0;color:var(--or);font-size:.58rem;padding:1px 5px;border-radius:3px;font-weight:700">⚠ Venc.</span>':'<span style="background:#E3F2FD;color:var(--bl);font-size:.58rem;padding:1px 5px;border-radius:3px">A pagar</span>');
+              html+='<tr style="border-bottom:1px solid #E8EDF5;background:'+(e.isPago?'#F9FFF9':'inherit')+'">'+
                 '<td style="padding:4px 10px;font-size:.64rem;color:var(--mu)">Dup. '+e.dup+'</td>'+
-                '<td colspan="2" style="padding:4px 10px;font-size:.64rem;color:var(--mu)">Venc: '+vencDisp+'</td>'+
+                '<td style="padding:4px 10px;font-size:.64rem;color:var(--mu)">Venc: '+vencDisp+'</td>'+
+                '<td style="padding:4px 10px;font-size:.63rem;color:var(--mu)">'+(e.pagto?'Pago: <span style="color:var(--gr);font-weight:600">'+e.pagto.substr(8,2)+'/'+e.pagto.substr(5,2)+'</span>':'—')+'</td>'+
                 '<td style="text-align:right;padding:4px 10px;font-size:.64rem" class="n">'+fmtF(e.valor)+'</td>'+
-                '<td style="text-align:right;padding:4px 10px;font-size:.64rem;color:var(--gr)" class="n">'+fmtF(e.vpago)+'</td>'+
-                '<td style="text-align:right;padding:4px 10px;font-size:.64rem;color:'+(isPast?'var(--or)':'var(--yw)')+'" class="n">'+fmtF(e.ab)+'</td>'+
+                '<td style="text-align:right;padding:4px 10px;font-size:.64rem;color:var(--gr);font-weight:'+(e.vpago>0?'700':'400')+'" class="n">'+(e.vpago>0?fmtF(e.vpago):'—')+'</td>'+
+                '<td style="text-align:right;padding:4px 10px;font-size:.64rem;color:'+(e.isPago?'var(--mu)':isPast?'var(--or)':'var(--yw)')+';font-weight:'+(e.ab>0.01?'700':'400')+'" class="n">'+(e.ab>0.01?fmtF(e.ab):'—')+'</td>'+
+                '<td style="padding:4px 10px">'+dupStatus+'</td>'+
               '</tr>';
             });
             html+='</table></td></tr>';
