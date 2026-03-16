@@ -321,6 +321,7 @@ tfoot td:first-child,tfoot td:nth-child(2){text-align:left;}
 <div class="nav">
   <div class="nt on" onclick="showPg('visao',this)">&#128202; Vis&#227;o Geral</div>
   <div class="nt"    onclick="showPg('mensal',this)">&#128197; M&#234;s a M&#234;s</div>
+  <div class="nt"    id="nt-hoje" onclick="showPg('hoje',this)">&#9989; Pagamentos de Hoje</div>
 </div>
 
 <!-- ═══ VISÃO GERAL ═══ -->
@@ -434,6 +435,48 @@ tfoot td:first-child,tfoot td:nth-child(2){text-align:left;}
         <tfoot id="mtf"></tfoot>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- ═══ PAGAMENTOS DE HOJE ═══ -->
+<div class="pg" id="pg-hoje">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);font-weight:700;margin-bottom:2px;">Data de Pagamento</div>
+      <div id="hoje-titulo" style="font-size:1.05rem;font-weight:800;color:var(--tx);"></div>
+    </div>
+    <input type="text" id="hoje-srch" placeholder="&#128269; Buscar fornecedor..." oninput="renderHoje()"
+      style="padding:7px 14px;border-radius:20px;border:1px solid var(--bd);font-size:.75rem;font-family:var(--fn);background:#fff;width:240px;">
+  </div>
+  <!-- KPIs do dia -->
+  <div class="kpis" id="kpis-hoje" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;"></div>
+  <!-- Tabela -->
+  <div class="tw">
+    <div class="th2">
+      <h3 id="hoje-tab-tit">Pagamentos realizados hoje</h3>
+      <span class="tc2" id="hoje-tc"></span>
+    </div>
+    <div class="ts">
+      <table>
+        <thead>
+          <tr>
+            <th class="tl">#</th>
+            <th class="tl">Fornecedor</th>
+            <th class="tl">NF</th>
+            <th class="tl">Duplicata</th>
+            <th>Vencimento</th>
+            <th>Valor Título</th>
+            <th>Valor Pago Hoje</th>
+          </tr>
+        </thead>
+        <tbody id="hoje-tb"></tbody>
+        <tfoot id="hoje-tf"></tfoot>
+      </table>
+    </div>
+  </div>
+  <div id="hoje-empty" style="display:none;text-align:center;padding:48px 24px;color:var(--mu);font-size:.85rem;">
+    <div style="font-size:2rem;margin-bottom:8px;">&#128197;</div>
+    Nenhum pagamento registrado para hoje.
   </div>
 </div>
 
@@ -570,6 +613,136 @@ window.showPg=function(n,el){
   if(el) el.classList.add('on');
   if(n==='visao'){buildVG();renderCards();}
   if(n==='mensal'){buildMC();renderMesT();}
+  if(n==='hoje'){buildHoje();renderHoje();}
+};
+
+/* ══════ PAGAMENTOS DE HOJE ══════ */
+var _hojeRows=[];
+
+function buildHoje(){
+  // Formata data exibição
+  var parts=TODAY.split('-');
+  var dias=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  var dt=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+  var nomeDia=dias[dt.getDay()];
+  document.getElementById('hoje-titulo').textContent=nomeDia+', '+parts[2]+'/'+parts[1]+'/'+parts[0];
+
+  // Badge no tab — mostra total pago hoje
+  _hojeRows=[];
+  var totalVpago=0;
+  var totalTitulo=0;
+  var nDups=0;
+  var fornSet=new Set();
+
+  FORN.forEach(function(f){
+    var det=f.det||{};
+    Object.keys(det).forEach(function(nf){
+      var nd=det[nf];
+      var dupls=nd.dupls||[];
+      dupls.forEach(function(du){
+        if(du.pagto===TODAY && du.vpago>0){
+          _hojeRows.push({
+            fid:   f.id,
+            fnm:   f.nm,
+            nf:    nf,
+            dup:   du.dup,
+            venc:  du.venc||'',
+            valor: du.valor,
+            vpago: du.vpago
+          });
+          totalVpago+=du.vpago;
+          totalTitulo+=du.valor;
+          nDups++;
+          fornSet.add(f.id);
+        }
+      });
+    });
+  });
+
+  // KPIs
+  var kEl=document.getElementById('kpis-hoje');
+  function fmtK(v){return'R$ '+r2(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  kEl.innerHTML=
+    '<div class="kpi kg"><div class="lb">Total Pago Hoje</div><div class="vl" style="color:var(--gr)">'+fmtK(totalVpago)+'</div><div class="sb">'+nDups+' duplicata(s)</div></div>'+
+    '<div class="kpi kb"><div class="lb">Valor dos Títulos</div><div class="vl" style="color:var(--bl)">'+fmtK(totalTitulo)+'</div><div class="sb">Soma dos valores originais</div></div>'+
+    '<div class="kpi kr"><div class="lb">Fornecedores</div><div class="vl" style="color:var(--r)">'+fornSet.size+'</div><div class="sb">com pagamento hoje</div></div>'+
+    '<div class="kpi ky"><div class="lb">Duplicatas</div><div class="vl" style="color:var(--yw)">'+nDups+'</div><div class="sb">registros de pagamento</div></div>';
+
+  // Badge no tab
+  var ntHoje=document.getElementById('nt-hoje');
+  if(ntHoje){
+    if(nDups>0){
+      ntHoje.innerHTML='&#9989; Pagamentos de Hoje <span style="background:var(--gr);color:#fff;font-size:.6rem;padding:2px 7px;border-radius:10px;font-weight:700;margin-left:4px;">'+nDups+'</span>';
+    } else {
+      ntHoje.textContent='✅ Pagamentos de Hoje';
+    }
+  }
+}
+
+window.renderHoje=function(){
+  if(!_hojeRows.length){
+    var tit=document.getElementById('hoje-tab-tit');
+    if(tit) tit.textContent='Nenhum pagamento para hoje';
+    document.getElementById('hoje-tb').innerHTML='';
+    document.getElementById('hoje-tf').innerHTML='';
+    document.getElementById('hoje-tc').textContent='';
+    document.getElementById('hoje-empty').style.display='block';
+    document.getElementById('hoje-tb').closest('.tw').style.display='none';
+    return;
+  }
+  document.getElementById('hoje-empty').style.display='none';
+  var tw=document.getElementById('hoje-tb').closest('.tw');
+  if(tw) tw.style.display='';
+
+  var srch=(document.getElementById('hoje-srch')||{}).value||'';
+  srch=srch.toLowerCase();
+
+  // Agrupa por fornecedor para ordenação
+  var fornMap={};
+  _hojeRows.forEach(function(r){
+    if(srch&&r.fnm.toLowerCase().indexOf(srch)<0) return;
+    if(!fornMap[r.fid]) fornMap[r.fid]={fnm:r.fnm,rows:[],tot:0};
+    fornMap[r.fid].rows.push(r);
+    fornMap[r.fid].tot+=r.vpago;
+  });
+  var keys=Object.keys(fornMap);
+  keys.sort(function(a,b){return fornMap[b].tot-fornMap[a].tot;});
+
+  function fmt(v){return'R$ '+r2(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function fmtD(d){return d?d.substr(8,2)+'/'+d.substr(5,2)+'/'+d.substr(0,4):'—';}
+
+  var html='';
+  var totVpago=0;
+  var totValor=0;
+  var idx=0;
+
+  keys.forEach(function(k){
+    var fg=fornMap[k];
+    fg.rows.forEach(function(r){
+      idx++;
+      totVpago+=r.vpago;
+      totValor+=r.valor;
+      html+='<tr>'+
+        '<td style="text-align:right;color:var(--mu);font-size:.68rem;">'+idx+'</td>'+
+        '<td style="font-weight:600;font-size:.75rem;">'+fg.fnm+'</td>'+
+        '<td style="font-size:.73rem;">'+r.nf+'</td>'+
+        '<td style="font-size:.73rem;text-align:center;">'+r.dup+'</td>'+
+        '<td style="font-size:.73rem;text-align:center;">'+fmtD(r.venc)+'</td>'+
+        '<td style="text-align:right;font-size:.73rem;">'+fmt(r.valor)+'</td>'+
+        '<td style="text-align:right;font-weight:700;color:var(--gr);font-size:.75rem;">'+fmt(r.vpago)+'</td>'+
+      '</tr>';
+    });
+  });
+
+  document.getElementById('hoje-tb').innerHTML=html;
+  document.getElementById('hoje-tf').innerHTML=
+    '<tr style="background:#F1F8F4;font-weight:800;">'+
+    '<td colspan="5" style="text-align:right;font-size:.75rem;color:var(--mu);">TOTAL</td>'+
+    '<td style="text-align:right;font-size:.8rem;">'+fmt(totValor)+'</td>'+
+    '<td style="text-align:right;font-size:.82rem;color:var(--gr);">'+fmt(totVpago)+'</td>'+
+    '</tr>';
+  document.getElementById('hoje-tc').textContent=idx+' registro(s) · '+keys.length+' fornecedor(es)';
+  document.getElementById('hoje-tab-tit').textContent='Pagamentos de '+TODAY.substr(8,2)+'/'+TODAY.substr(5,2)+'/'+TODAY.substr(0,4);
 };
 
 /* ══════ VISÃO GERAL ══════ */
@@ -1248,6 +1421,7 @@ window.refreshData=function(){
 /* ── INIT ── */
 buildVG();
 renderCards();
+buildHoje(); // pré-carrega badge do tab
 
 })();
 </script>
