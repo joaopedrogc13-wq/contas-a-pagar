@@ -491,6 +491,23 @@ tfoot td:first-child,tfoot td:nth-child(2){text-align:left;}
 var FORN  = JSON.parse(document.getElementById('d-forn').textContent);
 var MES   = JSON.parse(document.getElementById('d-mes').textContent);
 var GRAND = JSON.parse(document.getElementById('d-grand').textContent);
+
+// Garante campo pag (pago por mes de DTPAGTO) — retrocompativel com dados sem campo pag
+FORN.forEach(function(f){
+  if(\!f.pag){
+    var pag={};
+    Object.keys(f.det||{}).forEach(function(nf){
+      (f.det[nf].dupls||[]).forEach(function(du){
+        if(du.pagto && du.vpago>0){
+          var mp=du.pagto.substr(5,2);
+          if(\!pag[mp]) pag[mp]={pago:0};
+          pag[mp].pago=Math.round((pag[mp].pago+du.vpago)*100)/100;
+        }
+      });
+    });
+    f.pag=pag;
+  }
+});
 var TODAY='2026-03-16';
 
 var MN={'01':'Janeiro','02':'Fevereiro','03':'Março','04':'Abril','05':'Maio','06':'Junho'};
@@ -818,7 +835,9 @@ function buildVG(){
     var c=0,t=0,p=0,a=0,v=0;
     FORN.forEach(function(f){
       c+=(f.comp[m]||{}).total||0;
-      var ti=f.tit[m]||{};t+=ti.titulo||0;p+=ti.pago||0;a+=ti.aberto||0;
+      var ti=f.tit[m]||{};t+=ti.titulo||0;a+=ti.aberto||0;
+      // pago por mes de pagamento (DTPAGTO), nao por vencimento
+      p+=(f.pag&&f.pag[m])?f.pag[m].pago:0;
       var vd=aggVenc(f,m);v+=vd.total;
     });
     cC.push(Math.round(c));cT2.push(Math.round(t));cP.push(Math.round(p));
